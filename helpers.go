@@ -11,3 +11,10 @@ func isRecordExists(records []libdns.Record, libRecord libdns.Record) bool {
 
 	return false
 }
+
+func normalizeZone(zone string) string {
+	if len(zone) > 0 && zone[len(zone)-1] == '.' {
+		return zone[:len(zone)-1]
+	}
+	return zone
+}
