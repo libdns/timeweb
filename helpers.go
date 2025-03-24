@@ -1,6 +1,10 @@
 package timeweb
 
-import "github.com/libdns/libdns"
+import (
+	"strings"
+
+	"github.com/libdns/libdns"
+)
 
 func isRecordExists(records []libdns.Record, libRecord libdns.Record) bool {
 	for _, record := range records {
@@ -13,8 +17,5 @@ func isRecordExists(records []libdns.Record, libRecord libdns.Record) bool {
 }
 
 func normalizeZone(zone string) string {
-	if len(zone) > 0 && zone[len(zone)-1] == '.' {
-		return zone[:len(zone)-1]
-	}
-	return zone
+	return strings.TrimSuffix(strings.Replace(zone, "*.", "", 1), ".")
 }
