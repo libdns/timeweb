@@ -67,11 +67,16 @@ func (r *SavedRecord) libDNSRecord(zone string) TimewebRecord {
 }
 
 func (r *RecordResponse) libDNSRecord(zone string) TimewebRecord {
+	data := r.Data.Value
+	// For MX records, prepend priority to the data field
+	if r.Type == "MX" && r.Data.Priority > 0 {
+		data = fmt.Sprintf("%d %s", r.Data.Priority, r.Data.Value)
+	}
 	return TimewebRecord{
 		rr: libdns.RR{
 			Name: libdns.RelativeName(r.Fqdn, zone),
 			Type: r.Type,
-			Data: r.Data.Value,
+			Data: data,
 		},
 		id: fmt.Sprintf("%d", r.ID),
 	}
