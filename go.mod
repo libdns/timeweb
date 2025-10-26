@@ -4,8 +4,8 @@ go 1.18
 
 require (
 	github.com/joho/godotenv v1.5.1
-	github.com/libdns/libdns v0.2.3
-	github.com/stretchr/testify v1.10.0
+	github.com/libdns/libdns v1.1.1
+	github.com/stretchr/testify v1.11.1
 )
 
 require (
