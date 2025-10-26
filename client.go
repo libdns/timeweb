@@ -21,9 +21,9 @@ func (p *Provider) createRecord(ctx context.Context, zone string, record libdns.
 	return result, err
 }
 
-func (p *Provider) updateRecord(ctx context.Context, zone string, record libdns.Record) (SavedRecord, error) {
+func (p *Provider) updateRecord(ctx context.Context, zone string, record libdns.Record, recordID string) (SavedRecord, error) {
 	body, err := json.Marshal(libdnsToRecord(record))
-	reqURL := fmt.Sprintf("%s/domains/%s/dns-records/%s", p.ApiURL, zone, record.ID)
+	reqURL := fmt.Sprintf("%s/domains/%s/dns-records/%s", p.ApiURL, zone, recordID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, reqURL, bytes.NewReader(body))
 
 	var result SavedRecord
@@ -32,8 +32,8 @@ func (p *Provider) updateRecord(ctx context.Context, zone string, record libdns.
 	return result, err
 }
 
-func (p *Provider) deleteRecord(ctx context.Context, zone string, record libdns.Record) error {
-	reqURL := fmt.Sprintf("%s/domains/%s/dns-records/%s", p.ApiURL, zone, record.ID)
+func (p *Provider) deleteRecord(ctx context.Context, zone string, recordID string) error {
+	reqURL := fmt.Sprintf("%s/domains/%s/dns-records/%s", p.ApiURL, zone, recordID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, reqURL, nil)
 
 	err = p.doAPIRequest(req, nil)

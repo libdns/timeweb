@@ -48,9 +48,18 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 
 func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
 	zone = normalizeZone(zone)
+	zoneRecords, err := p.GetRecords(ctx, zone)
+	if err != nil {
+		return nil, err
+	}
+	
 	var deleted []libdns.Record
 	for _, record := range records {
-		err := p.deleteRecord(ctx, zone, record)
+		recordID, exists := findRecordID(zoneRecords, record)
+		if !exists {
+			return nil, fmt.Errorf("record not found for deletion")
+		}
+		err := p.deleteRecord(ctx, zone, recordID)
 		if err != nil {
 			return nil, err
 		}
@@ -70,9 +79,9 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns
 	var results []libdns.Record
 	var resultErr error
 	for _, libRecord := range records {
-		exists := isRecordExists(zoneRecords, libRecord)
-		if exists {
-			record, err := p.updateRecord(ctx, zone, libRecord)
+		recordID, exists := findRecordID(zoneRecords, libRecord)
+		if exists && recordID != "" {
+			record, err := p.updateRecord(ctx, zone, libRecord, recordID)
 			if err != nil {
 				resultErr = err
 			}

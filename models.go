@@ -41,29 +41,47 @@ type SavedRecord struct {
 	} `json:"dns_record"`
 }
 
-func (r *SavedRecord) libDNSRecord(zone string) libdns.Record {
-	return libdns.Record{
-		ID:    fmt.Sprintf("%d", r.DNSRecord.ID),
-		Name:  libdns.RelativeName(r.DNSRecord.Data.Subdomain, zone),
-		Type:  r.DNSRecord.Type,
-		Value: r.DNSRecord.Data.Value,
+// TimewebRecord wraps a libdns.RR with provider-specific metadata
+type TimewebRecord struct {
+	rr libdns.RR
+	id string
+}
+
+func (tr TimewebRecord) RR() libdns.RR {
+	return tr.rr
+}
+
+func (tr TimewebRecord) ID() string {
+	return tr.id
+}
+
+func (r *SavedRecord) libDNSRecord(zone string) TimewebRecord {
+	return TimewebRecord{
+		rr: libdns.RR{
+			Name: libdns.RelativeName(r.DNSRecord.Data.Subdomain, zone),
+			Type: r.DNSRecord.Type,
+			Data: r.DNSRecord.Data.Value,
+		},
+		id: fmt.Sprintf("%d", r.DNSRecord.ID),
 	}
 }
 
-func (r *RecordResponse) libDNSRecord(zone string) libdns.Record {
-	return libdns.Record{
-		ID:       fmt.Sprintf("%d", r.ID),
-		Name:     libdns.RelativeName(r.Fqdn, zone),
-		Type:     r.Type,
-		Value:    r.Data.Value,
-		Priority: r.Data.Priority,
+func (r *RecordResponse) libDNSRecord(zone string) TimewebRecord {
+	return TimewebRecord{
+		rr: libdns.RR{
+			Name: libdns.RelativeName(r.Fqdn, zone),
+			Type: r.Type,
+			Data: r.Data.Value,
+		},
+		id: fmt.Sprintf("%d", r.ID),
 	}
 }
 
 func libdnsToRecord(r libdns.Record) Record {
+	rr := r.RR()
 	return Record{
-		Type:      r.Type,
-		Value:     r.Value,
-		Subdomain: r.Name,
+		Type:      rr.Type,
+		Value:     rr.Data,
+		Subdomain: rr.Name,
 	}
 }

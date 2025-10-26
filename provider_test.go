@@ -29,10 +29,10 @@ func setup() {
 	zone = os.Getenv("TIMEWEB_ZONE")
 	ctx = context.Background()
 	sourceRecords = []libdns.Record{
-		{
-			Type:  "A",
-			Name:  zone,
-			Value: "1.2.3.1",
+		libdns.RR{
+			Type: "A",
+			Name: zone,
+			Data: "1.2.3.1",
 		},
 	}
 }
