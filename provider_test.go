@@ -2,6 +2,8 @@ package timeweb_test
 
 import (
 	"context"
+	"net/netip"
+
 	"github.com/joho/godotenv"
 	"github.com/libdns/libdns"
 	"github.com/libdns/timeweb"
@@ -29,10 +31,9 @@ func setup() {
 	zone = os.Getenv("TIMEWEB_ZONE")
 	ctx = context.Background()
 	sourceRecords = []libdns.Record{
-		{
-			Type:  "A",
-			Name:  zone,
-			Value: "1.2.3.1",
+		libdns.Address{
+			Name: zone,
+			IP:   netip.MustParseAddr("1.2.3.1"),
 		},
 	}
 }

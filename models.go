@@ -41,28 +41,138 @@ type SavedRecord struct {
 }
 
 func (r *SavedRecord) libDNSRecord(zone string) libdns.Record {
-	return libdns.Record{
-		ID:    fmt.Sprintf("%d", r.DNSRecord.ID),
-		Name:  libdns.RelativeName(r.DNSRecord.Data.Subdomain, zone),
-		Type:  r.DNSRecord.Type,
-		Value: r.DNSRecord.Data.Value,
+	name := libdns.RelativeName(r.DNSRecord.Data.Subdomain, zone)
+	recordType := r.DNSRecord.Type
+	value := r.DNSRecord.Data.Value
+	recordID := r.DNSRecord.ID
+
+	// Return typed records based on record type
+	switch recordType {
+	case "TXT":
+		return libdns.TXT{
+			Name:         name,
+			Text:         value,
+			ProviderData: recordID, // Store Timeweb ID for updates/deletes
+		}
+	case "A", "AAAA":
+		// For A/AAAA records, we need to parse the IP address
+		rr := libdns.RR{
+			Name: name,
+			Type: recordType,
+			Data: value,
+		}
+		parsed, err := rr.Parse()
+		if err == nil {
+			// Attach provider data to the parsed record
+			if addr, ok := parsed.(libdns.Address); ok {
+				addr.ProviderData = recordID
+				return addr
+			}
+		}
+		return rr
+	case "CNAME":
+		return libdns.CNAME{
+			Name:         name,
+			Target:       value,
+			ProviderData: recordID,
+		}
+	case "MX":
+		return libdns.MX{
+			Name:         name,
+			Target:       value,
+			ProviderData: recordID,
+		}
+	default:
+		// For unknown types, return RR
+		return libdns.RR{
+			Name: name,
+			Type: recordType,
+			Data: value,
+		}
 	}
 }
 
 func (r *RecordResponse) libDNSRecord(zone string) libdns.Record {
-	return libdns.Record{
-		ID:       fmt.Sprintf("%d", r.ID),
-		Name:     libdns.RelativeName(r.Fqdn, zone),
-		Type:     r.Type,
-		Value:    r.Data.Value,
-		Priority: r.Data.Priority,
+	name := libdns.RelativeName(r.Fqdn, zone)
+	recordType := r.Type
+	value := r.Data.Value
+	recordID := r.ID
+
+	// Return typed records based on record type
+	switch recordType {
+	case "TXT":
+		return libdns.TXT{
+			Name:         name,
+			Text:         value,
+			ProviderData: recordID, // Store Timeweb ID for updates/deletes
+		}
+	case "A", "AAAA":
+		// For A/AAAA records, we need to parse the IP address
+		rr := libdns.RR{
+			Name: name,
+			Type: recordType,
+			Data: value,
+		}
+		parsed, err := rr.Parse()
+		if err == nil {
+			// Attach provider data to the parsed record
+			if addr, ok := parsed.(libdns.Address); ok {
+				addr.ProviderData = recordID
+				return addr
+			}
+		}
+		return rr
+	case "CNAME":
+		return libdns.CNAME{
+			Name:         name,
+			Target:       value,
+			ProviderData: recordID,
+		}
+	case "MX":
+		return libdns.MX{
+			Name:         name,
+			Preference:   uint16(r.Data.Priority),
+			Target:       value,
+			ProviderData: recordID,
+		}
+	default:
+		// For unknown types, return RR
+		return libdns.RR{
+			Name: name,
+			Type: recordType,
+			Data: value,
+		}
 	}
 }
 
 func libdnsToRecord(r libdns.Record) Record {
+	rr := r.RR()
 	return Record{
-		Type:      r.Type,
-		Value:     r.Value,
-		Subdomain: r.Name,
+		Type:      rr.Type,
+		Value:     rr.Data,
+		Subdomain: rr.Name,
 	}
+}
+
+// getRecordID extracts the Timeweb record ID from ProviderData or returns empty string
+func getRecordID(r libdns.Record) string {
+	switch rec := r.(type) {
+	case libdns.TXT:
+		if id, ok := rec.ProviderData.(uint); ok {
+			return fmt.Sprintf("%d", id)
+		}
+	case libdns.Address:
+		if id, ok := rec.ProviderData.(uint); ok {
+			return fmt.Sprintf("%d", id)
+		}
+	case libdns.CNAME:
+		if id, ok := rec.ProviderData.(uint); ok {
+			return fmt.Sprintf("%d", id)
+		}
+	case libdns.MX:
+		if id, ok := rec.ProviderData.(uint); ok {
+			return fmt.Sprintf("%d", id)
+		}
+	}
+	return ""
 }
