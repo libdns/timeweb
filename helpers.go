@@ -7,8 +7,10 @@ import (
 )
 
 func isRecordExists(records []libdns.Record, libRecord libdns.Record) bool {
+	targetRR := libRecord.RR()
 	for _, record := range records {
-		if libRecord.ID == record.ID || (libRecord.Name == record.Name && libRecord.Type == record.Type) {
+		rr := record.RR()
+		if targetRR.Name == rr.Name && targetRR.Type == rr.Type {
 			return true
 		}
 	}
