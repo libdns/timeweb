@@ -5,26 +5,33 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/libdns/libdns"
 	"io"
 	"net/http"
+
+	"github.com/libdns/libdns"
 )
 
-func (p *Provider) createRecord(ctx context.Context, zone string, record libdns.Record) (SavedRecord, error) {
-	body, err := json.Marshal(libdnsToRecord(record))
-	reqURL := fmt.Sprintf("%s/domains/%s/dns-records", p.ApiURL, zone)
+func (p *Provider) createRecord(ctx context.Context, zone string, record libdns.Record) (libdns.Record, error) {
+	body, err := json.Marshal(libdnsToPostRecord(record))
+	if err != nil {
+		return libdns.RR{}, err
+	}
+	reqURL := p.v1("domains/%s/dns-records", zone)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(body))
+	if err != nil {
+		return libdns.RR{}, err
+	}
 
 	var result SavedRecord
 	err = p.doAPIRequest(req, &result)
 
-	return result, err
+	return result.libDNSRecord(record.RR().Name), err
 }
 
-func (p *Provider) updateRecord(ctx context.Context, zone string, record libdns.Record) (SavedRecord, error) {
-	body, err := json.Marshal(libdnsToRecord(record))
+func (p *Provider) updateRecord(ctx context.Context, zone string, record libdns.Record) (libdns.Record, error) {
+	body, err := json.Marshal(libdnsToPatchRecord(record))
 	if err != nil {
-		return SavedRecord{}, err
+		return libdns.RR{}, err
 	}
 
 	recordID := getRecordID(record)
@@ -32,7 +39,7 @@ func (p *Provider) updateRecord(ctx context.Context, zone string, record libdns.
 		// Need to look up the record by name/type to get the ID
 		existingRecords, err := p.GetRecords(ctx, zone)
 		if err != nil {
-			return SavedRecord{}, fmt.Errorf("failed to get records for update: %w", err)
+			return libdns.RR{}, fmt.Errorf("failed to get records for update: %w", err)
 		}
 
 		targetRR := record.RR()
@@ -45,20 +52,20 @@ func (p *Provider) updateRecord(ctx context.Context, zone string, record libdns.
 		}
 
 		if recordID == "" {
-			return SavedRecord{}, fmt.Errorf("record not found for update: %s %s", targetRR.Name, targetRR.Type)
+			return libdns.RR{}, fmt.Errorf("record not found for update: %s %s", targetRR.Name, targetRR.Type)
 		}
 	}
 
-	reqURL := fmt.Sprintf("%s/domains/%s/dns-records/%s", p.ApiURL, zone, recordID)
+	reqURL := p.v1("domains/%s/dns-records/%s", getFQDN(record, zone), recordID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, reqURL, bytes.NewReader(body))
 	if err != nil {
-		return SavedRecord{}, err
+		return libdns.RR{}, err
 	}
 
 	var result SavedRecord
 	err = p.doAPIRequest(req, &result)
 
-	return result, err
+	return result.libDNSRecord(record.RR().Name), err
 }
 
 func (p *Provider) deleteRecord(ctx context.Context, zone string, record libdns.Record) error {
@@ -85,7 +92,7 @@ func (p *Provider) deleteRecord(ctx context.Context, zone string, record libdns.
 		}
 	}
 
-	reqURL := fmt.Sprintf("%s/domains/%s/dns-records/%s", p.ApiURL, zone, recordID)
+	reqURL := p.v2("domains/%s/dns-records/%s", getFQDN(record, zone), recordID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, reqURL, nil)
 	if err != nil {
 		return err
@@ -116,7 +123,7 @@ func (p *Provider) doAPIRequest(req *http.Request, result interface{}) error {
 		return err
 	}
 
-	err = json.Unmarshal(body, &result)
+	err = json.Unmarshal(body, result)
 
 	return err
 }

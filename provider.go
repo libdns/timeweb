@@ -2,7 +2,6 @@ package timeweb
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/libdns/libdns"
@@ -15,7 +14,7 @@ type Provider struct {
 
 func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record, error) {
 	zone = normalizeZone(zone)
-	reqURL := fmt.Sprintf("%s/domains/%s/dns-records", p.ApiURL, zone)
+	reqURL := p.v1("domains/%s/user-records", zone)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, err
@@ -26,7 +25,7 @@ func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record
 
 	recs := make([]libdns.Record, 0, len(result.DNSRecords))
 	for _, r := range result.DNSRecords {
-		recs = append(recs, r.libDNSRecord(zone))
+		recs = append(recs, r.libDNSRecord())
 	}
 
 	return recs, err
@@ -40,7 +39,7 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 		if err != nil {
 			return nil, err
 		}
-		created = append(created, result.libDNSRecord(zone))
+		created = append(created, result)
 	}
 
 	return created, nil
@@ -76,17 +75,41 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns
 			if err != nil {
 				resultErr = err
 			}
-			results = append(results, record.libDNSRecord(zone))
+			results = append(results, record)
 		} else {
 			record, err := p.createRecord(ctx, zone, libRecord)
 			if err != nil {
 				resultErr = err
 			}
-			results = append(results, record.libDNSRecord(zone))
+			results = append(results, record)
 		}
 	}
 
 	return results, resultErr
+}
+
+func (p *Provider) ListZones(ctx context.Context) ([]libdns.Zone, error) {
+	reqURL := p.v1("domains")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var result DomainsResponse
+	err = p.doAPIRequest(req, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	zones := make([]libdns.Zone, 0, len(result.Domains))
+	for _, domain := range result.Domains {
+		if domain.FQDN == "" {
+			continue
+		}
+		zones = append(zones, libdns.Zone{Name: domain.FQDN})
+	}
+
+	return zones, nil
 }
 
 var (
@@ -94,4 +117,5 @@ var (
 	_ libdns.RecordAppender = (*Provider)(nil)
 	_ libdns.RecordSetter   = (*Provider)(nil)
 	_ libdns.RecordDeleter  = (*Provider)(nil)
+	_ libdns.ZoneLister     = (*Provider)(nil)
 )
