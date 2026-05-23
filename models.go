@@ -8,6 +8,7 @@ import (
 	"github.com/libdns/libdns"
 )
 
+// RecordResponse is the DNS record structure returned by the v1 GET (user-records) endpoint.
 type RecordResponse struct {
 	ID   uint   `json:"id"`
 	Type string `json:"type"`
@@ -19,10 +20,7 @@ type RecordResponse struct {
 	TTL uint `json:"ttl"`
 }
 
-type SavedRecord struct {
-	DNSRecord RecordResponse `json:"dns_record"`
-}
-
+// RecordsResponse wraps the v1 GET list response.
 type RecordsResponse struct {
 	Meta struct {
 		Total int `json:"total"`
@@ -42,12 +40,32 @@ type DomainsResponse struct {
 	Domains []DomainResponse `json:"domains"`
 }
 
-type TimewebRecord struct {
-	Subdomain string `json:"subdomain,omitempty"`
-	Type      string `json:"type"`
-	TTL       uint   `json:"ttl,omitempty"`
-	Value     string `json:"value"`
-	Priority  uint   `json:"priority,omitempty"` // MX priority
+// RecordResponseV2 is the DNS record structure returned by the v2 POST/PATCH endpoints.
+// Unlike v1, the subdomain field contains only the relative part (e.g. "sub", not "sub.example.com").
+type RecordResponseV2 struct {
+	ID   uint   `json:"id"`
+	Type string `json:"type"`
+	FQDN string `json:"fqdn"`
+	Data struct {
+		Value     string `json:"value"`
+		Subdomain string `json:"subdomain"`
+		Priority  uint   `json:"priority,omitempty"`
+	} `json:"data"`
+	TTL uint `json:"ttl"`
+}
+
+// SavedRecordV2 wraps the v2 POST/PATCH single-record response.
+type SavedRecordV2 struct {
+	DNSRecord RecordResponseV2 `json:"dns_record"`
+}
+
+// TimewebRecordV2 is the request body for v2 POST and PATCH.
+// The target subdomain/FQDN is specified in the URL path, not the body.
+type TimewebRecordV2 struct {
+	Type     string `json:"type"`
+	TTL      uint   `json:"ttl,omitempty"`
+	Value    string `json:"value,omitempty"`
+	Priority uint   `json:"priority,omitempty"`
 }
 
 func buildLibDNSRecord(name, recordType, value string, priority, ttlSeconds, recordID uint) libdns.Record {
@@ -56,17 +74,15 @@ func buildLibDNSRecord(name, recordType, value string, priority, ttlSeconds, rec
 		name = "@"
 	}
 
-	// Return typed records based on record type
 	switch recordType {
 	case "TXT":
 		return libdns.TXT{
 			Name:         name,
 			Text:         value,
-			ProviderData: recordID, // Store Timeweb ID for updates/deletes
+			ProviderData: recordID,
 			TTL:          ttl,
 		}
 	case "A", "AAAA":
-		// For A/AAAA records, we need to parse the IP address
 		rr := libdns.RR{
 			Name: name,
 			Type: recordType,
@@ -75,7 +91,6 @@ func buildLibDNSRecord(name, recordType, value string, priority, ttlSeconds, rec
 		}
 		parsed, err := rr.Parse()
 		if err == nil {
-			// Attach provider data to the parsed record
 			if addr, ok := parsed.(libdns.Address); ok {
 				addr.ProviderData = recordID
 				return addr
@@ -104,7 +119,6 @@ func buildLibDNSRecord(name, recordType, value string, priority, ttlSeconds, rec
 			TTL:          ttl,
 		}
 	default:
-		// For unknown types, return RR
 		return libdns.RR{
 			Name: name,
 			Type: recordType,
@@ -114,7 +128,7 @@ func buildLibDNSRecord(name, recordType, value string, priority, ttlSeconds, rec
 	}
 }
 
-func (r *SavedRecord) libDNSRecord(name string) libdns.Record {
+func (r *SavedRecordV2) libDNSRecord(name string) libdns.Record {
 	return buildLibDNSRecord(
 		name,
 		r.DNSRecord.Type,
@@ -136,42 +150,28 @@ func (r *RecordResponse) libDNSRecord() libdns.Record {
 	)
 }
 
-func libdnsToPostRecord(r libdns.Record) TimewebRecord {
-	return libdnsToRecord(r, true)
-}
-
-func libdnsToPatchRecord(r libdns.Record) TimewebRecord {
-	return libdnsToRecord(r, false)
-}
-
-func libdnsToRecord(r libdns.Record, haveSubdomain bool) TimewebRecord {
+// libdnsToRecord converts a libdns record to a Timeweb v2 API request body.
+// The target subdomain is specified separately in the URL path via getFQDN.
+func libdnsToRecord(r libdns.Record) TimewebRecordV2 {
 	rr := r.RR()
-	name := rr.Name
-	if !haveSubdomain || name == "@" {
-		name = ""
-	}
-	rec := TimewebRecord{
-		Type:      rr.Type,
-		Value:     rr.Data,
-		TTL:       uint(rr.TTL.Seconds()),
-		Subdomain: name,
+	rec := TimewebRecordV2{
+		Type:  rr.Type,
+		Value: rr.Data,
+		TTL:   uint(rr.TTL.Seconds()),
 	}
 
-	// Populate structured fields for known complex types
 	switch v := r.(type) {
 	case libdns.CNAME:
 		rec.Value = strings.TrimSuffix(v.Target, ".")
 	case libdns.MX:
 		rec.Value = strings.TrimSuffix(v.Target, ".")
 		rec.Priority = uint(v.Preference)
-	default:
-		// do nothing
 	}
 
 	return rec
 }
 
-// getRecordID extracts the Timeweb record ID from ProviderData or returns empty string
+// getRecordID extracts the Timeweb record ID from ProviderData or returns empty string.
 func getRecordID(r libdns.Record) string {
 	switch rec := r.(type) {
 	case libdns.TXT:
